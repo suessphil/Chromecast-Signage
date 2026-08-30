@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Signage Launcher</title>
+  <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background: #1e293b;
+      padding: 2.5rem;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+      width: 360px;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    h2 { margin-bottom: 1.5rem; font-size: 1.5rem; }
+    input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 1.2rem;
+      background: #0f172a;
+      border: 1px solid #475569;
+      color: white;
+      border-radius: 8px;
+      font-size: 1rem;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #38bdf8;
+      color: #0f172a;
+      font-weight: 700;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.2s;
+    }
+    button:hover { background-color: #0ea5e9; }
+    #status {
+      margin-top: 1.2rem;
+      font-size: 0.9rem;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>Signage Launcher</h2>
+  <input type="text" id="appIdInput" placeholder="Enter App ID">
+  <button onclick="launchCast()">Launch on Chromecast</button>
+  <div id="status">Waiting for Cast SDK...</div>
+</div>
+
+<script>
+  let castContext = null;
+
+  window['__onGCastApiAvailable'] = function(isAvailable) {
+    if (isAvailable) {
+      castContext = cast.framework.CastContext.getInstance();
+      document.getElementById('status').innerText = 'Ready to connect';
+    } else {
+      document.getElementById('status').innerText = 'Open in Google Chrome browser';
+    }
+  };
+
+  async function launchCast() {
+    const appId = document.getElementById('appIdInput').value.trim();
+    if (!appId) {
+      alert("Please enter your Application ID.");
+      return;
+    }
+
+    castContext.setOptions({
+      receiverApplicationId: appId,
+      autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+    });
+
+    try {
+      document.getElementById('status').innerText = 'Select your TV...';
+      await castContext.requestSession();
+      document.getElementById('status').innerText = 'Running on TV independently!';
+    } catch (err) {
+      if (err !== 'cancel') {
+        console.error(err);
+        document.getElementById('status').innerText = 'Connection error';
+      } else {
+        document.getElementById('status').innerText = 'Selection cancelled';
+      }
+    }
+  }
+</script>
+
+</body>
+</html>
