@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Digital Signage Receiver</title>
+  <!-- Google Cast Receiver SDK -->
+  <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #0b0f19;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #slide-container {
+      width: 88vw;
+      height: 80vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 3rem;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: opacity 0.6s ease-in-out;
+      opacity: 1;
+    }
+    .fade-out { opacity: 0 !important; }
+    #tag {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #38bdf8;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 1rem;
+    }
+    #title {
+      font-size: 3.5rem;
+      font-weight: 800;
+      margin-bottom: 1.5rem;
+      line-height: 1.2;
+    }
+    #message {
+      font-size: 2rem;
+      color: #cbd5e1;
+      max-width: 85%;
+      line-height: 1.5;
+    }
+    #date {
+      margin-top: 2rem;
+      font-size: 1.3rem;
+      color: #94a3b8;
+    }
+    #image {
+      max-width: 350px;
+      max-height: 250px;
+      border-radius: 12px;
+      margin-bottom: 1.5rem;
+      display: none;
+      object-fit: cover;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="slide-container">
+    <div id="tag">Announcement</div>
+    <img id="image" src="" alt="Announcement Graphic">
+    <h1 id="title">Loading Display...</h1>
+    <p id="message">Connecting to live feed...</p>
+    <div id="date"></div>
+  </div>
+
+  <script>
+    // 1. Initialize Cast Receiver Lifecycle
+    const context = cast.framework.CastReceiverContext.getInstance();
+    const options = new cast.framework.CastReceiverOptions();
+    options.maxInactivity = 86400; // Stay awake up to 24 hours without idle disconnect
+    context.start(options);
+
+    // 2. Paste your Google Apps Script /exec URL here:
+    const API_URL = "https://script.google.com/macros/s/AKfycby1uU6V7ciGX8xuNkTWinwhsEbIxVqMUHqFqh7pXTB01zTa3GMLe22z5PaR0yZCDreQvg/exec";
+
+    let announcements = [];
+    let currentIndex = 0;
+
+    async function fetchAnnouncements() {
+      try {
+        const res = await fetch(API_URL);
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          announcements = data;
+        }
+      } catch (err) {
+        console.error("Failed to fetch announcements:", err);
+      }
+    }
+
+    function renderNextSlide() {
+      if (announcements.length === 0) return;
+
+      const container = document.getElementById("slide-container");
+      container.classList.add("fade-out");
+
+      setTimeout(() => {
+        const item = announcements[currentIndex];
+        
+        document.getElementById("title").innerText = item.title || "";
+        document.getElementById("message").innerText = item.message || "";
+        document.getElementById("date").innerText = item.date ? item.date : "";
+
+        const imgElement = document.getElementById("image");
+        if (item.imageUrl && item.imageUrl.trim() !== "") {
+          imgElement.src = item.imageUrl;
+          imgElement.style.display = "block";
+        } else {
+          imgElement.style.display = "none";
+        }
+
+        container.classList.remove("fade-out");
+        currentIndex = (currentIndex + 1) % announcements.length;
+      }, 600);
+    }
+
+    // Initial Load
+    fetchAnnouncements().then(() => {
+      renderNextSlide();
+    });
+
+    // Sync from Google Sheet every 2 minutes
+    setInterval(fetchAnnouncements, 120000);
+
+    // Rotate slides every 10 seconds
+    setInterval(renderNextSlide, 10000);
+  </script>
+</body>
+</html>
