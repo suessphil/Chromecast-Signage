@@ -56,7 +56,7 @@
     }
     #image {
       max-width: 70vw;
-      max-height: 38vh;
+      max-height: 42vh;
       width: auto;
       height: auto;
       border-radius: 16px;
@@ -83,7 +83,7 @@
 </head>
 <body>
 
-  <!-- Hidden audio element ensures hardware media pipeline stays active on older Chromecast firmware -->
+  <!-- Hidden audio loop ensures hardware media pipeline stays active on all Chromecast models -->
   <audio loop autoplay muted playsinline src="https://raw.githubusercontent.com/anars/blank-audio/master/10-minutes-of-silence.mp3"></audio>
 
   <div id="slide-container">
@@ -100,8 +100,8 @@
     // ==========================================
     const API_URL = "PASTE_YOUR_GOOGLE_APPS_SCRIPT_EXEC_URL_HERE";
 
-    const SLIDE_DURATION_MS = 8000;   // Time each announcement stays on screen (8 seconds)
-    const SYNC_INTERVAL_MS = 180000;  // Refresh data from Google Sheets every 3 minutes
+    const SLIDE_DURATION_MS = 8000;   // 8 seconds per slide
+    const SYNC_INTERVAL_MS = 180000;  // Refresh from Google Sheets every 3 minutes
 
     let announcements = [];
     let currentIndex = 0;
@@ -118,7 +118,7 @@
 
     context.start(options);
 
-    // Heartbeat ping to prevent sleep state
+    // Heartbeat ping to prevent system sleep
     setInterval(() => {
       try {
         context.setSystemVolumeLevel(context.getSystemVolumeLevel());
@@ -137,6 +137,8 @@
         
         if (Array.isArray(data) && data.length > 0) {
           announcements = data;
+          
+          // Start the rotation loop if it isn't already running
           if (!slideTimer) {
             renderNextSlide();
             slideTimer = setInterval(renderNextSlide, SLIDE_DURATION_MS);
@@ -145,7 +147,7 @@
           showFallback("No Active Announcements", "Check back soon for upcoming updates.");
         }
       } catch (err) {
-        console.error("Feed error:", err);
+        console.error("Feed fetch error:", err);
         if (announcements.length === 0) {
           showFallback("Connecting...", "Fetching latest announcements from server.");
         }
@@ -153,7 +155,7 @@
     }
 
     // ==========================================
-    // 4. RENDER & CYCLE SLIDES
+    // 4. RENDER & CYCLE SLIDES SAFELY
     // ==========================================
     function renderNextSlide() {
       if (announcements.length === 0) return;
@@ -170,23 +172,38 @@
       setTimeout(() => {
         const item = announcements[currentIndex];
 
-        // Set Title & Message
+        // 1. Text Content
         titleEl.innerText = item.title || "";
         titleEl.style.display = item.title ? "block" : "none";
 
         messageEl.innerText = item.message || "";
         messageEl.style.display = item.message ? "block" : "none";
 
-        // Set Image (if present)
-        if (item.imageUrl && item.imageUrl.trim() !== "") {
-          imageEl.src = item.imageUrl.trim();
+        // 2. Safe Image Handling
+        const rawUrl = item.imageUrl ? item.imageUrl.trim() : "";
+        
+        // Filter out non-image links (like canva.link web pages)
+        if (rawUrl !== "" && !rawUrl.includes("canva.link")) {
+          imageEl.onerror = function() {
+            // Hide image if URL fails to load / expired CDN token
+            console.warn("Image failed to load:", rawUrl);
+            imageEl.style.display = "none";
+          };
+          imageEl.src = rawUrl;
           imageEl.style.display = "block";
         } else {
           imageEl.style.display = "none";
           imageEl.src = "";
         }
 
-        // Clean Date Formatting (Month Day, Year)
+        // If slide only contains an image and no text, clean up margins
+        if (!item.title && !item.message && imageEl.style.display === "block") {
+          imageEl.style.maxHeight = "58vh";
+        } else {
+          imageEl.style.maxHeight = "42vh";
+        }
+
+        // 3. Date Formatting
         if (item.date && String(item.date).trim() !== "") {
           const parsedDate = new Date(item.date);
           if (!isNaN(parsedDate.getTime())) {
@@ -207,7 +224,7 @@
         // Smooth fade in
         container.style.opacity = "1";
 
-        // Advance to next slide
+        // Advance index
         currentIndex = (currentIndex + 1) % announcements.length;
       }, 800);
     }
@@ -223,7 +240,7 @@
       container.style.opacity = "1";
     }
 
-    // Initial load + background sync
+    // Initial fetch and continuous background sync
     fetchAnnouncements();
     setInterval(fetchAnnouncements, SYNC_INTERVAL_MS);
   </script>
