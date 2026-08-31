@@ -173,10 +173,10 @@
         const item = announcements[currentIndex];
 
         // 1. Text Content
-        titleEl.innerText = item.title || "";
+        titleEl.innerHTML = item.title || "";
         titleEl.style.display = item.title ? "block" : "none";
 
-        messageEl.innerText = item.message || "";
+        messageEl.innerHTML = item.message || "";
         messageEl.style.display = item.message ? "block" : "none";
 
         // 2. Safe Image Handling
