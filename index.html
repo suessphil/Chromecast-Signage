@@ -6,75 +6,85 @@
   <!-- Google Cast Receiver SDK -->
   <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background-color: #0b0f19;
-      color: #ffffff;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body, html {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #0f172a;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      color: #f8fafc;
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
-      overflow: hidden;
     }
     #slide-container {
-      width: 88vw;
-      height: 80vh;
+      width: 90vw;
+      max-width: 1400px;
+      min-height: 70vh;
+      background: #1e293b;
+      border-radius: 24px;
+      padding: 3.5rem;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
       text-align: center;
-      padding: 3rem;
-      border-radius: 20px;
-      background: rgba(255, 255, 255, 0.05);
-      backdrop-filter: blur(10px);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      transition: opacity 0.6s ease-in-out;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       opacity: 1;
+      transition: opacity 0.8s ease-in-out;
     }
-    .fade-out { opacity: 0 !important; }
     #tag {
-      font-size: 1.5rem;
+      font-size: 1.1rem;
       font-weight: 700;
-      color: #38bdf8;
       text-transform: uppercase;
       letter-spacing: 2px;
+      color: #38bdf8;
       margin-bottom: 1rem;
     }
     #title {
-      font-size: 3.5rem;
+      font-size: 2.75rem;
       font-weight: 800;
-      margin-bottom: 1.5rem;
       line-height: 1.2;
-    }
-    #message {
-      font-size: 2rem;
-      color: #cbd5e1;
-      max-width: 85%;
-      line-height: 1.5;
-    }
-    #date {
-      margin-top: 2rem;
-      font-size: 1.3rem;
-      color: #94a3b8;
+      margin-bottom: 1rem;
+      color: #ffffff;
     }
     #image {
-      max-width: 70vw;          /* Fits up to 70% of TV screen width */
-      max-height: 38vh;         /* Fits up to ~38% of TV screen height */
+      max-width: 70vw;
+      max-height: 38vh;
       width: auto;
       height: auto;
       border-radius: 16px;
       margin-top: 1rem;
       margin-bottom: 1.5rem;
       display: none;
-      object-fit: contain;      /* Keeps correct aspect ratio without cropping */
+      object-fit: contain;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+    #message {
+      font-size: 1.5rem;
+      line-height: 1.6;
+      color: #cbd5e1;
+      max-width: 85%;
+      margin-bottom: 1.5rem;
+      white-space: pre-wrap;
+    }
+    #date {
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: #64748b;
     }
   </style>
 </head>
 <body>
+
+  <!-- Hidden audio element ensures hardware media pipeline stays active on older Chromecast firmware -->
+  <audio loop autoplay muted playsinline src="https://raw.githubusercontent.com/anars/blank-audio/master/10-minutes-of-silence.mp3"></audio>
 
   <div id="slide-container">
     <div id="tag">Announcements</div>
@@ -85,81 +95,137 @@
   </div>
 
   <script>
-    // 1. Initialize Cast Receiver Lifecycle with Keep-Alive
-const context = cast.framework.CastReceiverContext.getInstance();
-const options = new cast.framework.CastReceiverOptions();
+    // ==========================================
+    // 1. CONFIGURE YOUR APPS SCRIPT API URL HERE
+    // ==========================================
+    const API_URL = "PASTE_YOUR_GOOGLE_APPS_SCRIPT_EXEC_URL_HERE";
 
-// Disable the default idle timeout
-options.disableIdleTimeout = true;
-options.maxInactivity = 86400 * 365; // Extended safety buffer
-
-context.start(options);
-
-// Periodically ping the Cast framework to reset the internal activity timer
-setInterval(() => {
-  try {
-    // Touching the system volume or broadcasting heartbeat prevents sleep
-    context.setSystemVolumeLevel(context.getSystemVolumeLevel());
-  } catch (e) {
-    // Ignore heartbeat errors
-  }
-}, 30000);
-    
-    // 2. Paste your Google Apps Script /exec URL here:
-    const API_URL = "https://script.google.com/macros/s/AKfycby1uU6V7ciGX8xuNkTWinwhsEbIxVqMUHqFqh7pXTB01zTa3GMLe22z5PaR0yZCDreQvg/exec";
+    const SLIDE_DURATION_MS = 8000;   // Time each announcement stays on screen (8 seconds)
+    const SYNC_INTERVAL_MS = 180000;  // Refresh data from Google Sheets every 3 minutes
 
     let announcements = [];
     let currentIndex = 0;
+    let slideTimer = null;
 
+    // ==========================================
+    // 2. INITIALIZE CAST RECEIVER (24/7 KEEP-ALIVE)
+    // ==========================================
+    const context = cast.framework.CastReceiverContext.getInstance();
+    const options = new cast.framework.CastReceiverOptions();
+
+    options.disableIdleTimeout = true;
+    options.maxInactivity = 86400 * 365;
+
+    context.start(options);
+
+    // Heartbeat ping to prevent sleep state
+    setInterval(() => {
+      try {
+        context.setSystemVolumeLevel(context.getSystemVolumeLevel());
+      } catch (e) {
+        // Ignore heartbeat error
+      }
+    }, 30000);
+
+    // ==========================================
+    // 3. FETCH DATA FROM GOOGLE SHEETS API
+    // ==========================================
     async function fetchAnnouncements() {
       try {
-        const res = await fetch(API_URL);
-        const data = await res.json();
+        const response = await fetch(API_URL);
+        const data = await response.json();
+        
         if (Array.isArray(data) && data.length > 0) {
           announcements = data;
+          if (!slideTimer) {
+            renderNextSlide();
+            slideTimer = setInterval(renderNextSlide, SLIDE_DURATION_MS);
+          }
+        } else {
+          showFallback("No Active Announcements", "Check back soon for upcoming updates.");
         }
       } catch (err) {
-        console.error("Failed to fetch announcements:", err);
+        console.error("Feed error:", err);
+        if (announcements.length === 0) {
+          showFallback("Connecting...", "Fetching latest announcements from server.");
+        }
       }
     }
 
+    // ==========================================
+    // 4. RENDER & CYCLE SLIDES
+    // ==========================================
     function renderNextSlide() {
       if (announcements.length === 0) return;
 
       const container = document.getElementById("slide-container");
-      container.classList.add("fade-out");
+      const titleEl = document.getElementById("title");
+      const messageEl = document.getElementById("message");
+      const imageEl = document.getElementById("image");
+      const dateEl = document.getElementById("date");
+
+      // Smooth fade out
+      container.style.opacity = "0";
 
       setTimeout(() => {
         const item = announcements[currentIndex];
-        
-        document.getElementById("title").innerText = item.title || "";
-        document.getElementById("message").innerText = item.message || "";
-        document.getElementById("date").innerText = item.date ? item.date : "";
 
-        const imgElement = document.getElementById("image");
+        // Set Title & Message
+        titleEl.innerText = item.title || "";
+        titleEl.style.display = item.title ? "block" : "none";
+
+        messageEl.innerText = item.message || "";
+        messageEl.style.display = item.message ? "block" : "none";
+
+        // Set Image (if present)
         if (item.imageUrl && item.imageUrl.trim() !== "") {
-          imgElement.src = item.imageUrl;
-          imgElement.style.display = "block";
+          imageEl.src = item.imageUrl.trim();
+          imageEl.style.display = "block";
         } else {
-          imgElement.style.display = "none";
+          imageEl.style.display = "none";
+          imageEl.src = "";
         }
 
-        container.classList.remove("fade-out");
+        // Clean Date Formatting (Month Day, Year)
+        if (item.date && String(item.date).trim() !== "") {
+          const parsedDate = new Date(item.date);
+          if (!isNaN(parsedDate.getTime())) {
+            dateEl.innerText = parsedDate.toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "long",
+              day: "numeric"
+            });
+          } else {
+            dateEl.innerText = item.date;
+          }
+          dateEl.style.display = "block";
+        } else {
+          dateEl.innerText = "";
+          dateEl.style.display = "none";
+        }
+
+        // Smooth fade in
+        container.style.opacity = "1";
+
+        // Advance to next slide
         currentIndex = (currentIndex + 1) % announcements.length;
-      }, 600);
+      }, 800);
     }
 
-    // Initial Load
-    fetchAnnouncements().then(() => {
-      renderNextSlide();
-    });
+    function showFallback(title, message) {
+      const container = document.getElementById("slide-container");
+      document.getElementById("title").innerText = title;
+      document.getElementById("title").style.display = "block";
+      document.getElementById("message").innerText = message;
+      document.getElementById("message").style.display = "block";
+      document.getElementById("image").style.display = "none";
+      document.getElementById("date").innerText = "";
+      container.style.opacity = "1";
+    }
 
-    // Sync from Google Sheet every 2 minutes
-    setInterval(fetchAnnouncements, 120000);
-
-    // Rotate slides every 10 seconds
-    setInterval(renderNextSlide, 10000);
+    // Initial load + background sync
+    fetchAnnouncements();
+    setInterval(fetchAnnouncements, SYNC_INTERVAL_MS);
   </script>
 </body>
 </html>
-
