@@ -85,12 +85,26 @@
   </div>
 
   <script>
-    // 1. Initialize Cast Receiver Lifecycle
-    const context = cast.framework.CastReceiverContext.getInstance();
-    const options = new cast.framework.CastReceiverOptions();
-    options.maxInactivity = 86400; // Stay awake up to 24 hours without idle disconnect
-    context.start(options);
+    // 1. Initialize Cast Receiver Lifecycle with Keep-Alive
+const context = cast.framework.CastReceiverContext.getInstance();
+const options = new cast.framework.CastReceiverOptions();
 
+// Disable the default idle timeout
+options.disableIdleTimeout = true;
+options.maxInactivity = 86400 * 365; // Extended safety buffer
+
+context.start(options);
+
+// Periodically ping the Cast framework to reset the internal activity timer
+setInterval(() => {
+  try {
+    // Touching the system volume or broadcasting heartbeat prevents sleep
+    context.setSystemVolumeLevel(context.getSystemVolumeLevel());
+  } catch (e) {
+    // Ignore heartbeat errors
+  }
+}, 30000);
+    
     // 2. Paste your Google Apps Script /exec URL here:
     const API_URL = "https://script.google.com/macros/s/AKfycby1uU6V7ciGX8xuNkTWinwhsEbIxVqMUHqFqh7pXTB01zTa3GMLe22z5PaR0yZCDreQvg/exec";
 
