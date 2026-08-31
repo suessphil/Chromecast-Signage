@@ -180,12 +180,19 @@
         messageEl.style.display = item.message ? "block" : "none";
 
         // 2. Safe Image Handling
-        const rawUrl = item.imageUrl ? item.imageUrl.trim() : "";
+        let rawUrl = item.imageUrl ? item.imageUrl.trim() : "";
         
+        // Auto-convert standard Dropbox links to direct raw image URLs
+        if (rawUrl.includes("dropbox.com")) {
+          rawUrl = rawUrl.replace(/([?&])dl=[01]/, "$1raw=1");
+          if (!rawUrl.includes("raw=1")) {
+            rawUrl += (rawUrl.includes("?") ? "&" : "?") + "raw=1";
+          }
+        }
+
         // Filter out non-image links (like canva.link web pages)
         if (rawUrl !== "" && !rawUrl.includes("canva.link")) {
           imageEl.onerror = function() {
-            // Hide image if URL fails to load / expired CDN token
             console.warn("Image failed to load:", rawUrl);
             imageEl.style.display = "none";
           };
